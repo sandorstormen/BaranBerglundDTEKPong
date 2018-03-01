@@ -1,10 +1,9 @@
 #include <pic32mx.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
-#include "memcpy.h"
 #include "sprites.h"
 #include "u32helpers.h"
+#include "memcpy.h"
 
 #define DISPLAY_VDD PORTFbits.RF6
 #define DISPLAY_VBATT PORTFbits.RF5
@@ -138,7 +137,7 @@ void display_clear() {
 	int i, j;
 	spi_send_recv(0x20); // Set adressing mode
 	spi_send_recv(0x2); // Page adressing mode
-	for(i = 0; i < 8; i++) {
+	for(i = 0; i < 4; i++) {
 		DISPLAY_COMMAND_DATA_PORT &= ~DISPLAY_COMMAND_DATA_MASK;
 		
 		spi_send_recv(0xB0 + i);
@@ -189,7 +188,7 @@ uint8_t bool_screen[32 * 128];
 uint8_t temp_screen[32 * 128];
 void game_init(){
 	currentBall.x= 64-6;
-	currentBall.y= 16;
+	currentBall.y= 8;
 	
 	vbyte_to_bool( 32, 128, &blank_screen[0], &bool_screen[0]);
 	vbyte_to_bool( 16, 12, &ball_sprite[0], &currentBall.bool_array[0]);
@@ -197,14 +196,14 @@ void game_init(){
 void game_update();
 void make_screen_game(uint8_t* retArray, Ball ball, Paddle l_paddle, Paddle r_paddle) {
 	int i, j, t;
-	memcpy(&temp_screen[0], &bool_screen[0], 32*128);
+	//memcpy((int *)&temp_screen[0], (int *)&bool_screen[0], 32*128);
 	for(i = 0; i < 32/8; i++) {
 		for(t = 0; t < 8; t++) {
 			for(j = 0; j < 128; j++) {
 				if(currentBall.x <= j && (currentBall.x + 12) >= j) {
 					if(currentBall.y/8 <= i && (currentBall.y + 16)/8 >= i) {
 						if((currentBall.y%8 <= (7-t) && (currentBall.y + 16)%8 >= (7-t)) || (currentBall.y/8 < i && (currentBall.y + 16)/8 > i) || (currentBall.y%8 <= (7-t)) && (currentBall.y + 16)/8 > i || (currentBall.y + 16)%8 >= (7-t) && currentBall.y/8 < i){
-							temp_screen[i*128*8 + j*8 + t] |= 1; //currentBall.bool_array[(i-currentBall.y/8)*12*8 + (j-currentBall.x)*8 + t];
+							bool_screen[i*128*8 + j*8 + t] |= currentBall.bool_array[(i-currentBall.y/8)*12*8 + (j-currentBall.x)*8 + t];
 							//debugVar = (i-currentBall.y/8)*12*8 + (j-currentBall.x)*8 + t;
 							//display_debug(&debugVar);
 							//delay(1000000);
@@ -234,11 +233,11 @@ uint8_t display_array[4 * 128];
 void game_draw(){
 	if(IFS(0) & 0x100) {
 		IFS(0) &= ~0x100;
-		display_clear();
+		//display_clear();
 		make_screen_game(&display_array[0], currentBall, paddle_l, paddle_r);
 		display_image(&display_array[0]);
 		//currentBall.x++;
-		currentBall.y--;
+		//currentBall.y--;
 	}
 }
 
