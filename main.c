@@ -142,7 +142,7 @@ void port_init() {
 	PR2 = 31250;  //	80 000 000 / 256 / 31250 = 10 => 1/10
 	
 	T3CON = 0x8070; // bit 15 = 1 timer enabled| Bit 6-4 = 111 1:256 prescaling | bit 3 = 0 16-bit mode | bit 1 = 0 => internal clock sås
-	PR3 = 31250;  //	80 000 000 / 256 / 31250 = 10 => 1/10
+	PR3 = 312500;  //	80 000 000 / 256 / 31250 = 10 => 1/10
 }
 
 void display_image(const uint8_t data[]) {
@@ -226,11 +226,17 @@ uint8_t bool_bleck[32 * 128];
 uint8_t temp_screen[32 * 128];
 void game_init(){
 	currentBall.x= 65;
-	currentBall.y= 0;
+	currentBall.y= 15;
+	currentBall.bit_index = 0;
+	currentBall.page_index = 0;
 	paddle_l.x = 2;
-	paddle_l.y = 0;
+	paddle_l.y = 2;
+	paddle_l.bit_index = 0;
+	paddle_l.page_index = 0;
 	paddle_r.x = 117;
 	paddle_r.y = 0;
+	paddle_r.bit_index = 0;
+	paddle_r.page_index = 0;
 	vbyte_to_bool( 32, 128, &blank_screen[0], &bool_screen[0]);
 	//vbyte_to_bool( 32, 128, &bleck_screen[0], &bool_bleck[0]);
 	vbyte_to_bool( 16, 12, &ball_sprite[0], &currentBall.bool_array[0]);
@@ -241,44 +247,36 @@ int btns;
 void game_update() {
 	if(btns = get_btns()){
 		if (btns & 1)
-			if(IFS(0) & 0x1000) {
-				IFS(0) & ~0x1000;
+			//if(IFS(0) & 0x1000) {
+				//IFS(0) & ~0x1000;
 				paddle_r.y--;
-			}
+			//}
 		if (btns & 2)
-			if(IFS(0) & 0x1000) {
-				IFS(0) & ~0x1000;
+			//if(IFS(0) & 0x1000) {
+				//IFS(0) & ~0x1000;
 				paddle_r.y++;
-			}
+			//}
 		if (btns & 4)
-			if(IFS(0) & 0x1000) {
-				IFS(0) & ~0x1000;
+			//if(IFS(0) & 0x1000) {
+				//IFS(0) & ~0x1000;
 				paddle_l.y--;
-			}
+			//}
 		if (btns & 8)
-			if(IFS(0) & 0x1000) {
-				IFS(0) & ~0x1000;
+			//if(IFS(0) & 0x1000) {
+				//IFS(0) & ~0x1000;
 				paddle_l.y++;
-			}
+			//}
 	}
-	//debugVar = btns;
-	//display_debug(&debugVar);
-	
 };
 void make_screen_game(uint8_t* retArray) {
-	int i, j, t;
+	int i, j, t, ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex;
+	ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex = 0;
+	debugVar = 0;
 	memcpy((int *)&temp_screen[0], (int *)&bool_screen[0], 32*128);
-	/*
-	for(i=0; i < (32*128); i++) {
-		debugVar |= temp_screen[i];
-	}
-	display_debug(&debugVar);
-	delay(1000000000);
-	*/
 	for(i = 0; i < 32/8; i++) {
 		for(t = 0; t < 8; t++) {
 			for(j = 0; j < 128; j++) {
-				temp_screen[i*128*8 + j*8 + t] = 0;
+				bool_screen[i*128*8 + j*8 + t] = 0;
 			}
 		}
 	}
@@ -287,26 +285,34 @@ void make_screen_game(uint8_t* retArray) {
 			for(j = 0; j < 128; j++) {
 				if(currentBall.x <= j && (currentBall.x + 12) >= j) {
 					if(currentBall.y/8 <= i && (currentBall.y + 16)/8 >= i) {
-						if((currentBall.y%8 <= (7-t) && (currentBall.y + 16)%8 >= (7-t)) || (currentBall.y/8 < i && (currentBall.y + 16)/8 > i) || (currentBall.y%8 <= (7-t)) && (currentBall.y + 16)/8 > i || (currentBall.y + 16)%8 >= (7-t) && currentBall.y/8 < i){
-							temp_screen[i*128*8 + j*8 + t] |= currentBall.bool_array[(i-(currentBall.y/8))*12*8 + (j-currentBall.x)*8 + (t-currentBall.y%8)];
+						if(currentBall.y%8 <= t && (currentBall.y + 16)%8 >= t || (currentBall.y/8 < i && (currentBall.y + 16)/8 > i) || (currentBall.y%8 <= t) && (currentBall.y + 16)/8 > i || (currentBall.y + 16)%8 >= t && currentBall.y/8 < i){
+							
+							bool_screen[i*128*8 + j*8 + t] |= currentBall.bool_array[(i-currentBall.y/8)*12*8 + (j-currentBall.x)*8 + t];
+							ball_inc_bindex = 1;
+							//debugVar = (i-(currentBall.y/8))*12*8;
+							//display_debug(&debugVar);
+							//delay(100000);
+							
 						}
 					}
 				}
 				if(paddle_l.x <= j && (paddle_l.x + 9) >= j) {
 					if(paddle_l.y/8 <= i && (paddle_l.y + 32)/8 >= i) {
 						if((paddle_l.y%8 <= (7-t) && (paddle_l.y + 32)%8 >= (7-t)) || (paddle_l.y/8 < i && (paddle_l.y + 32)/8 > i) || (paddle_l.y%8 <= (7-t)) && (paddle_l.y + 32)/8 > i || (paddle_l.y + 32)%8 >= (7-t) && paddle_l.y/8 < i){
-							temp_screen[i*128*8 + j*8 + t] |= paddle_l.bool_array[(i-(paddle_l.y/8))*9*8 + (j-paddle_l.x)*8 + (t-paddle_l.y%8)];
+							bool_screen[i*128*8 + j*8 + t] |= paddle_l.bool_array[(i-(paddle_l.y/8))*9*8 + (j-paddle_l.x)*8 + t];
+							paddle_l_inc_bindex = 1;
 						}
 					}
 				}
 				if(paddle_r.x <= j && (paddle_r.x + 9) >= j) {
 					if(paddle_r.y/8 <= i && (paddle_r.y + 32)/8 >= i) {
 						if((paddle_r.y%8 <= (7-t) && (paddle_r.y + 32)%8 >= (7-t)) || (paddle_r.y/8 < i && (paddle_r.y + 32)/8 > i) || (paddle_r.y%8 <= (7-t)) && (paddle_r.y + 32)/8 > i || (paddle_r.y + 32)%8 >= (7-t) && paddle_r.y/8 < i){
-							temp_screen[i*128*8 + j*8 + t] |= paddle_r.bool_array[(i-(paddle_r.y/8))*9*8 + (j-paddle_r.x)*8 + (t-paddle_r.y%8)];
+							bool_screen[i*128*8 + j*8 + t] |= paddle_r.bool_array[(i-(paddle_r.y/8))*9*8 + (j-paddle_r.x)*8 + t];
+							paddle_r_inc_bindex = 1;
 						}
 					}
 				}
-				/*
+				/*	i*128*8 + j*8 + t 
 				if(64 <= j && (64 + 128) >= j) {
 					if(16/8 <= i && (16 + 32)/8 >= i) {
 						if((16%8 <= (7-t) && (16 + 32)%8 >= (7-t)) || (16/8 < i && (16 + 32)/8 > i) || (16%8 <= (7-t)) && (16 + 32)/8 > i || (16 + 32)%8 >= (7-t) && 16/8 < i){
@@ -315,11 +321,82 @@ void make_screen_game(uint8_t* retArray) {
 					}
 				}
 				*/
-				
+			}
+			if(ball_inc_bindex) {
+					ball_inc_bindex = 0;
+					currentBall.bit_index++;
+					if(currentBall.bit_index == 7) {
+						currentBall.bit_index = 0;
+						currentBall.page_index++;
+				}
+			}
+			if(paddle_r_inc_bindex) {
+					paddle_r_inc_bindex = 0;
+					paddle_r.bit_index++;
+					if(paddle_r.bit_index == 7) {
+						paddle_r.bit_index = 0;
+						paddle_r.page_index++;
+				}
+			}
+			if(paddle_r_inc_bindex) {
+					paddle_r_inc_bindex = 0;
+					paddle_r.bit_index++;
+					if(paddle_r.bit_index == 7) {
+						paddle_r.bit_index = 0;
+						paddle_l.page_index++;
+				}
 			}
 		}
 	}
-	bool_to_vbyte(&temp_screen[0], retArray);
+	bool_to_vbyte(&bool_screen[0], retArray);
+	return;
+}
+void make_screen_game_old(uint8_t* retArray) {
+	int i, j, t, ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex;
+	ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex = 0;
+	debugVar = 0;
+	for(i = 0; i < 4; i++) {
+		for(j = 0; j < 128; j++) {
+			//retArray[i*128 + j] = 0;
+		}
+	}
+	for(i = 0; i < 4; i++) {
+		for(j = 0; j < 128; j++) {
+			if(currentBall.x <= j && (currentBall.x + 12) >= j) {
+				if(currentBall.y/8 <= i && (currentBall.y + 16)/8 >= i) {
+					retArray[i*128 + j]  |= ball_sprite[currentBall.page_index*128 + currentBall.bit_index];
+					ball_inc_bindex = 1;
+					//debugVar = currentBall.page_index*128 + currentBall.bit_index;
+					//display_debug(&debugVar);
+					//delay(100000);
+				}
+			}	
+		}
+		if(ball_inc_bindex) {
+					ball_inc_bindex = 0;
+					currentBall.bit_index++;
+					if(currentBall.bit_index == 128) {
+						currentBall.bit_index = 0;
+						currentBall.page_index++;
+				}
+			}
+			if(paddle_r_inc_bindex) {
+					paddle_r_inc_bindex = 0;
+					paddle_r.bit_index++;
+					if(paddle_r.bit_index == 128) {
+						paddle_r.bit_index = 0;
+						paddle_r.page_index++;
+				}
+			}
+			if(paddle_r_inc_bindex) {
+					paddle_r_inc_bindex = 0;
+					paddle_r.bit_index++;
+					if(paddle_r.bit_index == 128) {
+						paddle_r.bit_index = 0;
+						paddle_l.page_index++;
+				}
+			}
+		}
 	return;
 }
 uint8_t display_array[4 * 128];
@@ -339,13 +416,15 @@ int main() {
 	//eeprom_init();
 	display_clear();
 	current_game_state = STATE_MAIN_GAME;
+	prev_game_state = STATE_MAIN_GAME;
 	game_init();
-	while(true) {
+	while(1) {
 		switch (current_game_state){
 			case STATE_MAIN_GAME:
 				game_update();
 				game_draw();
 			break;
+			
 		}
 		if(prev_game_state != current_game_state) {
 			switch (current_game_state) {
