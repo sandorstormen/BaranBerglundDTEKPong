@@ -1,13 +1,14 @@
-#ifndef _DISPLAY_H_ //Header guard
-#define _DISPLAY_H_
+#ifndef DISPLAY_H_ //Header guard
+#define DISPLAY_H_
 
-#include "sprites.h"
 #include <stdint.h>
 #include <stdlib.h>
 
+void game_init();
+void reset_score();
+int game_run(short int tennis);
 
-void display_init();
-void draw_pixel(int x, int y, uint8_t* retArray);
-void display_image_hori(const uint8_t data[]);
+void main_menu_init();
+int main_menu_run();
 
 #endif //_DISPLAY_H_

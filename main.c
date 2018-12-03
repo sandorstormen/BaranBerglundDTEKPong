@@ -1,83 +1,23 @@
 #include <pic32mx.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "sprites.h"
 #include "u32helpers.h"
 #include "memcpy.h"
 #include "eeprom.h"
 #include "io.h"
+#include "display.h"
+
 
 #define STATE_MAIN_MENU 1
 #define STATE_MAIN_GAME 2
 
-
 #define EEPROM_ADDRESS 0x50
-
-#define DISPLAY_VDD PORTFbits.RF6
-#define DISPLAY_VBATT PORTFbits.RF5
-#define DISPLAY_COMMAND_DATA PORTFbits.RF4
-#define DISPLAY_RESET PORTGbits.RG9
-
-
-#define DISPLAY_VDD_PORT PORTF // Uno32 pin 38
-#define DISPLAY_VDD_MASK 0x40
-#define DISPLAY_VBATT_PORT PORTF // Uno32 pin 40
-#define DISPLAY_VBATT_MASK 0x20
-#define DISPLAY_COMMAND_DATA_PORT PORTF // Uno32 pin 39
-#define DISPLAY_COMMAND_DATA_MASK 0x10
-#define DISPLAY_RESET_PORT PORTG // Uno32 pin 10 JP4
-#define DISPLAY_RESET_MASK 0x200
 
 /*	The display has a D/C pin (display or command select) that is used to determine whether bytes sent to the display
 **	are interpreted as commands or as display data. The D/C pin is set high for display buffer access and low for
 **	command access.
 */
 
-void delay(int cyc) {
-	int i;
-	for(i = cyc; i > 0; i--);
-}
-
-uint8_t spi_send_recv(uint8_t data) {
-	while(!(SPI2STAT & 0x08));
-	SPI2BUF = data;
-	while(!(SPI2STAT & 0x01));
-	return SPI2BUF;
-}
-
-
-void display_init() {
-	DISPLAY_COMMAND_DATA_PORT &= ~DISPLAY_COMMAND_DATA_MASK; // Clear the command port
-	delay(10);
-	DISPLAY_VDD_PORT &= ~DISPLAY_VDD_MASK; // Put the power on for the display and wait for it to power on
-	delay(1000000);
-	
-	spi_send_recv(0xAE);	// Display off command
-	DISPLAY_RESET_PORT &= ~DISPLAY_RESET_MASK;	// Bring reset low 
-	delay(10);
-	DISPLAY_RESET_PORT |= DISPLAY_RESET_MASK;	// Bring rest high
-	delay(10);
-	
-	spi_send_recv(0x8D);	// Send the Set Charge Pump from P 3/6 https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf
-	spi_send_recv(0x14);
-	
-	spi_send_recv(0xD9);	// Set Pre-Charge Period command from P 32/59 https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf 
-	spi_send_recv(0xF1);
-	
-	DISPLAY_VBATT_PORT &= ~DISPLAY_VBATT_MASK;  // Turn on VCC and wait 100ms
-	delay(10000000);
-	// Send the commands to invert the display. This puts the display origin in the upper left corner.
-	spi_send_recv(0xA1);	//remap columns
-	spi_send_recv(0xC8);	//remap rows
-	// Send the commands to select sequential COM configuration. This makes the display memory non-interleaved.
-	spi_send_recv(0xDA); //set COM configuration command
-	spi_send_recv(0x20); //sequential COM, left/right remap enabled
-	
-	spi_send_recv(0x81); // Set contrast command
-	spi_send_recv(0xFF); // Hex for 255
-	
-	spi_send_recv(0xAF); // Send Display On command
-}
 void eeprom_init() {
 	/* Set up i2c */
 	I2C1CON = 0x0;
@@ -138,303 +78,55 @@ void port_init() {
 	SPI2CONSET = 0x8000;
 	
 	// Timer setup
-	T2CON = 0x8070; // bit 15 = 1 timer enabled| Bit 6-4 = 111 1:256 prescaling | bit 3 = 0 16-bit mode | bit 1 = 0 => internal clock sås
-	PR2 = 31250;  //	80 000 000 / 256 / 31250 = 10 => 1/10
+	T1CON = 0x9830; // bit 15 = 1 timer enabled | bit 5-4 = 11 => 1:256 prescaling | 
+	PR1 = 3125; //	80 000 000 / 256 / 31250 = 10 => 1/10
 	
-	T3CON = 0x8070; // bit 15 = 1 timer enabled| Bit 6-4 = 111 1:256 prescaling | bit 3 = 0 16-bit mode | bit 1 = 0 => internal clock sås
-	PR3 = 312500;  //	80 000 000 / 256 / 31250 = 10 => 1/10
+	T2CON = 0x8040; // bit 15 = 1 timer enabled| Bit 6-4 = 111 1:256 prescaling | bit 3 = 0 16-bit mode | bit 1 = 0 => internal clock sås
+	PR2 = 1250; //	80 000 000 / 64 / 31250 = 10 => 1/10
+	
+	T3CON = 0x8040; // bit 15 = 1 timer enabled| Bit 6-4 = 111 1:256 prescaling | bit 3 = 0 16-bit mode | bit 1 = 0 => internal clock sås
+	PR3 = 1250;  //	80 000 000 / 64 / 31250 = 10 => 1/10
+	
+	T4CON = 0x8070;
+	PR4 = 31250;
+	
+	// bit 15 = 1 timer enabled| Bit 6-4 = 111 1:256 prescaling | bit 3 = 0 16-bit mode | bit 1 = 0 => internal clock sås
+	//	80 000 000 / 256 / 31250 = 10 => 1/10
+	
+	// Initialize lights to be off
+	PORTE = 0;
 }
-
-void display_image(const uint8_t data[]) {
-	int i, j;
-	spi_send_recv(0x20); // Set adressing mode
-	spi_send_recv(0x2); // Page adressing mode
-	for(i = 0; i < 4; i++) {
-		DISPLAY_COMMAND_DATA_PORT &= ~DISPLAY_COMMAND_DATA_MASK;
-		spi_send_recv(0xB0 + i);
-		//spi_send_recv(0x22);
-		//spi_send_recv(i);
-		
-		//spi_send_recv(x & 0xF);
-		//spi_send_recv(0x10 | ((x >> 4) & 0xF));
-		
-		DISPLAY_COMMAND_DATA_PORT |= DISPLAY_COMMAND_DATA_MASK;
-		
-		for(j = 0; j < 128; j++) {
-			spi_send_recv(data[i*128 + j]);
-		}
-		DISPLAY_COMMAND_DATA_PORT &= ~DISPLAY_COMMAND_DATA_MASK;
-	}
-}
-
-void display_clear() {
-	int i, j;
-	spi_send_recv(0x20); // Set adressing mode
-	spi_send_recv(0x2); // Page adressing mode
-	for(i = 0; i < 4; i++) {
-		DISPLAY_COMMAND_DATA_PORT &= ~DISPLAY_COMMAND_DATA_MASK;
-		
-		spi_send_recv(0xB0 + i);
-		//spi_send_recv(i);
-		
-		//spi_send_recv(x & 0xF);
-		//spi_send_recv(0x10 | ((x >> 4) & 0xF));
-		
-		DISPLAY_COMMAND_DATA_PORT |= DISPLAY_COMMAND_DATA_MASK;
-		
-		for(j = 0; j < 128; j++) {
-			spi_send_recv((uint8_t)0x00);
-		}
-		
-		DISPLAY_COMMAND_DATA_PORT &= ~DISPLAY_COMMAND_DATA_MASK;
-	}
-}
-
-void main_menu_init();
-void main_menu_update();
-void main_menu_update();
-int debugVar;
-void vbyte_to_bool(int height, int width, const volatile uint8_t* src, volatile uint8_t* dst) {
-	// Height has to be devisible by eight
-	int i,j,t;
-	for(i = 0; i < (height/8); i++) {
-		for(t = 0; t < 8; t++) {
-			for(j = 0; j < width; j++) {
-				dst[i*128*8 + j*8 + t] = ((src[i*width + j]) >> (7-t)) & 0x01;
-			}
-		}
-	}
-	return;
-}
-void bool_to_vbyte(uint8_t* src, uint8_t* dst){
-	// Height has to be devisible by eight
-	int i,j,t;
-	for(i = 0; i < 32/8; i++) {
-		for(t = 0; t < 8; t++) {
-			for(j = 0; j < 128; j++) {
-				dst[i*128 + j] |= src[i*128*8 + j*8 + t] << (7-t);
-			}
-		}
-	}
-	return;
-}
-struct Ball currentBall;
-struct Paddle paddle_l;
-struct Paddle paddle_r;
-uint8_t bool_screen[32 * 128];
-uint8_t bool_bleck[32 * 128];
-uint8_t temp_screen[32 * 128];
-void game_init(){
-	currentBall.x= 65;
-	currentBall.y= 15;
-	currentBall.bit_index = 0;
-	currentBall.page_index = 0;
-	paddle_l.x = 2;
-	paddle_l.y = 2;
-	paddle_l.bit_index = 0;
-	paddle_l.page_index = 0;
-	paddle_r.x = 117;
-	paddle_r.y = 0;
-	paddle_r.bit_index = 0;
-	paddle_r.page_index = 0;
-	vbyte_to_bool( 32, 128, &blank_screen[0], &bool_screen[0]);
-	//vbyte_to_bool( 32, 128, &bleck_screen[0], &bool_bleck[0]);
-	vbyte_to_bool( 16, 12, &ball_sprite[0], &currentBall.bool_array[0]);
-	vbyte_to_bool( 9, 32, &paddle_sprite[0], &paddle_l.bool_array[0]);
-	vbyte_to_bool( 9, 32, &paddle_sprite[0], &paddle_r.bool_array[0]);
-};
-int btns;
-void game_update() {
-	if(btns = get_btns()){
-		if (btns & 1)
-			//if(IFS(0) & 0x1000) {
-				//IFS(0) & ~0x1000;
-				paddle_r.y--;
-			//}
-		if (btns & 2)
-			//if(IFS(0) & 0x1000) {
-				//IFS(0) & ~0x1000;
-				paddle_r.y++;
-			//}
-		if (btns & 4)
-			//if(IFS(0) & 0x1000) {
-				//IFS(0) & ~0x1000;
-				paddle_l.y--;
-			//}
-		if (btns & 8)
-			//if(IFS(0) & 0x1000) {
-				//IFS(0) & ~0x1000;
-				paddle_l.y++;
-			//}
-	}
-};
-void make_screen_game(uint8_t* retArray) {
-	int i, j, t, ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex;
-	ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex = 0;
-	debugVar = 0;
-	memcpy((int *)&temp_screen[0], (int *)&bool_screen[0], 32*128);
-	for(i = 0; i < 32/8; i++) {
-		for(t = 0; t < 8; t++) {
-			for(j = 0; j < 128; j++) {
-				bool_screen[i*128*8 + j*8 + t] = 0;
-			}
-		}
-	}
-	for(i = 0; i < 32/8; i++) {
-		for(t = 0; t < 8; t++) {
-			for(j = 0; j < 128; j++) {
-				if(currentBall.x <= j && (currentBall.x + 12) >= j) {
-					if(currentBall.y/8 <= i && (currentBall.y + 16)/8 >= i) {
-						if(currentBall.y%8 <= t && (currentBall.y + 16)%8 >= t || (currentBall.y/8 < i && (currentBall.y + 16)/8 > i) || (currentBall.y%8 <= t) && (currentBall.y + 16)/8 > i || (currentBall.y + 16)%8 >= t && currentBall.y/8 < i){
-							
-							bool_screen[i*128*8 + j*8 + t] |= currentBall.bool_array[(i-currentBall.y/8)*12*8 + (j-currentBall.x)*8 + t];
-							ball_inc_bindex = 1;
-							//debugVar = (i-(currentBall.y/8))*12*8;
-							//display_debug(&debugVar);
-							//delay(100000);
-							
-						}
-					}
-				}
-				if(paddle_l.x <= j && (paddle_l.x + 9) >= j) {
-					if(paddle_l.y/8 <= i && (paddle_l.y + 32)/8 >= i) {
-						if((paddle_l.y%8 <= (7-t) && (paddle_l.y + 32)%8 >= (7-t)) || (paddle_l.y/8 < i && (paddle_l.y + 32)/8 > i) || (paddle_l.y%8 <= (7-t)) && (paddle_l.y + 32)/8 > i || (paddle_l.y + 32)%8 >= (7-t) && paddle_l.y/8 < i){
-							bool_screen[i*128*8 + j*8 + t] |= paddle_l.bool_array[(i-(paddle_l.y/8))*9*8 + (j-paddle_l.x)*8 + t];
-							paddle_l_inc_bindex = 1;
-						}
-					}
-				}
-				if(paddle_r.x <= j && (paddle_r.x + 9) >= j) {
-					if(paddle_r.y/8 <= i && (paddle_r.y + 32)/8 >= i) {
-						if((paddle_r.y%8 <= (7-t) && (paddle_r.y + 32)%8 >= (7-t)) || (paddle_r.y/8 < i && (paddle_r.y + 32)/8 > i) || (paddle_r.y%8 <= (7-t)) && (paddle_r.y + 32)/8 > i || (paddle_r.y + 32)%8 >= (7-t) && paddle_r.y/8 < i){
-							bool_screen[i*128*8 + j*8 + t] |= paddle_r.bool_array[(i-(paddle_r.y/8))*9*8 + (j-paddle_r.x)*8 + t];
-							paddle_r_inc_bindex = 1;
-						}
-					}
-				}
-				/*	i*128*8 + j*8 + t 
-				if(64 <= j && (64 + 128) >= j) {
-					if(16/8 <= i && (16 + 32)/8 >= i) {
-						if((16%8 <= (7-t) && (16 + 32)%8 >= (7-t)) || (16/8 < i && (16 + 32)/8 > i) || (16%8 <= (7-t)) && (16 + 32)/8 > i || (16 + 32)%8 >= (7-t) && 16/8 < i){
-							//bool_screen[i*128*8 + j*8 + t] |= bool_bleck[(i-(16/8))*128*8 + (j-64)*8 + (t-32%8)];
-						}
-					}
-				}
-				*/
-			}
-			if(ball_inc_bindex) {
-					ball_inc_bindex = 0;
-					currentBall.bit_index++;
-					if(currentBall.bit_index == 7) {
-						currentBall.bit_index = 0;
-						currentBall.page_index++;
-				}
-			}
-			if(paddle_r_inc_bindex) {
-					paddle_r_inc_bindex = 0;
-					paddle_r.bit_index++;
-					if(paddle_r.bit_index == 7) {
-						paddle_r.bit_index = 0;
-						paddle_r.page_index++;
-				}
-			}
-			if(paddle_r_inc_bindex) {
-					paddle_r_inc_bindex = 0;
-					paddle_r.bit_index++;
-					if(paddle_r.bit_index == 7) {
-						paddle_r.bit_index = 0;
-						paddle_l.page_index++;
-				}
-			}
-		}
-	}
-	bool_to_vbyte(&bool_screen[0], retArray);
-	return;
-}
-void make_screen_game_old(uint8_t* retArray) {
-	int i, j, t, ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex;
-	ball_inc_bindex, paddle_l_inc_bindex, paddle_r_inc_bindex = 0;
-	debugVar = 0;
-	for(i = 0; i < 4; i++) {
-		for(j = 0; j < 128; j++) {
-			//retArray[i*128 + j] = 0;
-		}
-	}
-	for(i = 0; i < 4; i++) {
-		for(j = 0; j < 128; j++) {
-			if(currentBall.x <= j && (currentBall.x + 12) >= j) {
-				if(currentBall.y/8 <= i && (currentBall.y + 16)/8 >= i) {
-					retArray[i*128 + j]  |= ball_sprite[currentBall.page_index*128 + currentBall.bit_index];
-					ball_inc_bindex = 1;
-					//debugVar = currentBall.page_index*128 + currentBall.bit_index;
-					//display_debug(&debugVar);
-					//delay(100000);
-				}
-			}	
-		}
-		if(ball_inc_bindex) {
-					ball_inc_bindex = 0;
-					currentBall.bit_index++;
-					if(currentBall.bit_index == 128) {
-						currentBall.bit_index = 0;
-						currentBall.page_index++;
-				}
-			}
-			if(paddle_r_inc_bindex) {
-					paddle_r_inc_bindex = 0;
-					paddle_r.bit_index++;
-					if(paddle_r.bit_index == 128) {
-						paddle_r.bit_index = 0;
-						paddle_r.page_index++;
-				}
-			}
-			if(paddle_r_inc_bindex) {
-					paddle_r_inc_bindex = 0;
-					paddle_r.bit_index++;
-					if(paddle_r.bit_index == 128) {
-						paddle_r.bit_index = 0;
-						paddle_l.page_index++;
-				}
-			}
-		}
-	return;
-}
-uint8_t display_array[4 * 128];
-void game_draw(){
-	if(IFS(0) & 0x100) {
-		IFS(0) &= ~0x100;
-		make_screen_game(&display_array[0]);
-		display_image(&display_array[0]);
-	}
-}
-
 
 int current_game_state, prev_game_state;
 int main() {
 	port_init();
 	display_init();
-	//eeprom_init();
-	display_clear();
-	current_game_state = STATE_MAIN_GAME;
-	prev_game_state = STATE_MAIN_GAME;
-	game_init();
+	prev_game_state = -1;
+	current_game_state = STATE_MAIN_MENU;
+	short int tennis = 2;
 	while(1) {
 		switch (current_game_state){
 			case STATE_MAIN_GAME:
-				game_update();
-				game_draw();
+				if( 0 == game_run(tennis) ) current_game_state = STATE_MAIN_MENU;
 			break;
-			
+			case STATE_MAIN_MENU:
+				tennis = main_menu_run();
+				if( tennis < 2 )
+					current_game_state = STATE_MAIN_GAME;
+			break;
 		}
 		if(prev_game_state != current_game_state) {
 			switch (current_game_state) {
 				case STATE_MAIN_GAME:
+					reset_score();
 					game_init();
+				break;
+				case STATE_MAIN_MENU:
+					main_menu_init();
 				break;
 			}
 		}
 		prev_game_state = current_game_state;
-	}
-	for(;;);
-	return 0;
+		}
+	return 0;	
 }
