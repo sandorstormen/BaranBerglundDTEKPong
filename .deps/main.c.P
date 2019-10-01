@@ -1,0 +1,18 @@
+main.c.o: main.c /opt/mcb32tools/include/pic32mx.h \
+ /opt/mcb32tools/include/stdint.h \
+ /opt/mcb32tools/lib/gcc/mipsel-mcb32-elf/4.9.2/include/stdint-gcc.h \
+ /opt/mcb32tools/include/stdlib.h /opt/mcb32tools/include/klibc/extern.h \
+ /opt/mcb32tools/include/klibc/inline.h \
+ /opt/mcb32tools/lib/gcc/mipsel-mcb32-elf/4.9.2/include/stddef.h \
+ /opt/mcb32tools/lib/gcc/mipsel-mcb32-elf/4.9.2/include/stdbool.h \
+ u32helpers.h memcpy.h eeprom.h io.h /opt/mcb32tools/include/pic32mx.h \
+ display.h
+main.c /opt/mcb32tools/include/pic32mx.h :
+ /opt/mcb32tools/include/stdint.h :
+ /opt/mcb32tools/lib/gcc/mipsel-mcb32-elf/4.9.2/include/stdint-gcc.h :
+ /opt/mcb32tools/include/stdlib.h /opt/mcb32tools/include/klibc/extern.h :
+ /opt/mcb32tools/include/klibc/inline.h :
+ /opt/mcb32tools/lib/gcc/mipsel-mcb32-elf/4.9.2/include/stddef.h :
+ /opt/mcb32tools/lib/gcc/mipsel-mcb32-elf/4.9.2/include/stdbool.h :
+ u32helpers.h memcpy.h eeprom.h io.h /opt/mcb32tools/include/pic32mx.h :
+ display.h :

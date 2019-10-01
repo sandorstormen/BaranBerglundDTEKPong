@@ -222,7 +222,7 @@ void draw_score_tennnis(int score1, int score2) {
 	}
 	if(score1 == 0 && score2 == 0) return;
 	draw_string(60, 1, ":", display_array);
-	if(score1 == 0) draw_string(16, 1, "LOVE", display_array);
+	if(score1 == 0) draw_string(24, 1, "LOVE", display_array);
 	if(score1 == 1) draw_string(42, 1, "15", display_array);
 	char score1_str[3];
 	if(10 > score1 && score1 > 1) {
@@ -230,8 +230,7 @@ void draw_score_tennnis(int score1, int score2) {
 			display_array[52 + i] = font['0' * 8 + i];
 		}
 		for (i = 0; i < 8; i++) {
-			display_array[52 - 8 + i] = font[((score1 - ((score1+1)/10)*10) + '0') * 8 + i];
-			PORTE = score1;
+			display_array[52 - 8 + i] = font[( (score1 + 1) + '0') * 8 + i];
 		}
 	}
 	if(score2 == 0) draw_string(74, 1, "LOVE", display_array);
@@ -239,10 +238,10 @@ void draw_score_tennnis(int score1, int score2) {
 	char score2_str[3];
 	if(10 > score2 && score2 > 1) {
 		for (i = 0; i < 8; i++) {
-			display_array[66 + 8 + i] = font['0' * 8 + i];
+			display_array[68 + 8 + i] = font['0' * 8 + i];
 		}
 		for (i = 0; i < 8; i++) {
-			display_array[66 + i] = font[((score1 - ((score1+1)/10)*10) + '0') * 8 + i];
+			display_array[68 + i] = font[( (score2 + 1) + '0') * 8 + i];
 		}
 	}
 }
@@ -283,21 +282,21 @@ void draw_score_30(int score1, int score2) {
 	}
 	if(10 <= score2 && score2 < 100) {
 		for (i = 0; i < 8; i++) {
-			display_array[68 + 8 + i] = font[(((score2)/10) + '0') * 8 + i];
+			display_array[68 + i] = font[(((score2)/10) + '0') * 8 + i];
 		}
 		for (i = 0; i < 8; i++) {
-			display_array[68 + i] = font[((score2 - ((score2)/10)*10) + '0') * 8 + i];
+			display_array[68 + 8 + i] = font[((score2 - ((score2)/10)*10) + '0') * 8 + i];
 		}
 	}
 	if(100 <= score2) {
 		for (i = 0; i < 8; i++) {
-			display_array[68 + 8 + 8 + i] = font[((score2/100) + '0') * 8 + i];
+			display_array[68 + i] = font[((score2/100) + '0') * 8 + i];
 		}
 		for (i = 0; i < 8; i++) {
 			display_array[68 + 8 + i] = font[(((score2 - ((score2/100)*100))/10) + '0' ) * 8 + i];
 		}
 		for (i = 0; i < 8; i++) {
-			display_array[68 + i] = font[((score2 - ((score2/100)*100) - (((score2/10)*10) - ((score2/100)*100))) + '0') * 8 + i];
+			display_array[68 + 8 + 8 + i] = font[((score2 - ((score2/100)*100) - (((score2/10)*10) - ((score2/100)*100))) + '0') * 8 + i];
 		}
 	}
 }
@@ -329,26 +328,29 @@ void right_win() {
 }
 
 void game_init(short tennis){ // Starts a new round of the game
-	
 	delay(1000);
 	clear();
 	if(tennis == 0) {
 		if(paddle_l.score >= paddle_r.score +2) {
 			left_win();
+			display_image_hori();
 			return;
 		}
 		if(paddle_r.score >= paddle_l.score +2) {
 			right_win();
+			display_image_hori();
 			return;
 		}
 	}
 	else {
 		if(paddle_l.score >= 30) {
 			left_win();
+			display_image_hori();
 			return;
 	}
 		if(paddle_r.score >= 30) {
 			right_win();
+			display_image_hori();
 			return;
 		}
 	}
@@ -365,11 +367,10 @@ void game_init(short tennis){ // Starts a new round of the game
 	ball.speed_x = 13;
 	ball.speed_y = 13;
 	
-	int r = 1;//rand() % 2;
+	int r = 1;
 	if(r == 1) {ball.direction_x = 1;}
 	else { ball.direction_x = -1;}
 	
-	//r = rand() % 2;
 	if(r == 1) {ball.direction_y = 1;}
 	else { ball.direction_y = -1;}
 	
@@ -526,8 +527,35 @@ void ball_interrupt(){ // Different timers are used to make the ball move faster
 		interrupt_y++;
 	}
 }
-
+int game_check_win(short tennis) {
+	if(tennis == 0) {
+		if(paddle_l.score >= paddle_r.score +2) {
+			left_win();
+			return 1;
+		}
+		if(paddle_r.score >= paddle_l.score +2) {
+			right_win();
+			return 1;
+		}
+	}
+	else {
+		if(paddle_l.score >= 30 ) {
+			left_win();
+			return 1;
+		}
+		if( paddle_r.score >= 30) {
+			right_win();
+			return 1;
+		}
+	}
+	return 0;
+}
 int game_run(short tennis){ // Main game loop
+	if ( game_check_win(tennis) == 1 ) {
+		display_image_hori();
+		delay(50000000);
+		return 0;
+	}
 	ball_interrupt(); // Update ball speed
 	ball_update(tennis); // Update ball position
 	if(IFS(0) & 0x10) {
@@ -536,37 +564,6 @@ int game_run(short tennis){ // Main game loop
 	}
 	make_screen_game(tennis);
 	display_image_hori();
-	if(tennis == 0) {
-		if(paddle_l.score >= paddle_r.score +2) {
-			left_win();
-			make_screen_game(tennis);
-			display_image_hori();
-			delay(10000000);
-			return 0;
-		}
-		if(paddle_r.score >= paddle_l.score +2) {
-			right_win();
-			make_screen_game(tennis);
-			display_image_hori();
-			delay(10000000);
-			return 0;
-		}
-	}
-	else {
-		if(paddle_l.score >= 30 ) {
-			left_win();
-			make_screen_game(tennis);
-			display_image_hori();
-			delay(10000000);
-			return 0;
-		}
-		if( paddle_r.score >= 30)
-			right_win();
-			make_screen_game(tennis);
-			display_image_hori();
-			delay(10000000);
-			return 0;
-		}
 	return 1;
 }
 uint8_t main_menu_display[4 * 128] = {0};
